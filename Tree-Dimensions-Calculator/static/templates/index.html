@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Tree Measurement</title>
+    <style>
+        /* General Body Styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            display: flex;
+            gap: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+
+        /* Column and Container Styling */
+        .column {
+            flex: 1;
+            padding: 20px;
+            box-sizing: border-box;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Reduced width of Tree Information column */
+        #calculation-column {
+            flex: 0.5; /* Makes the Tree Information column narrower */
+        }
+
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+
+        .input-field {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        /* Input and Button Styling */
+        input[type="text"],
+        input[type="number"],
+        input[type="file"] {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            outline: none;
+            transition: border 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="file"]:focus {
+            border-color: #4CAF50;
+        }
+
+        button {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        /* Blue color for Calculate Dimensions button */
+        #calculation-area button:last-child {
+            background-color: #007BFF;
+        }
+
+        #calculation-area button:last-child:hover {
+            background-color: #0066cc;
+        }
+
+        button.active {
+            background-color: red;
+        }
+
+        #image-container {
+            margin-top: 20px;
+        }
+
+        #uploaded-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 15px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+
+        /* Result Section Styling */
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #e6f7e6;
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            flex: 0.5; /* Adjusted for side-by-side layout */
+        }
+
+        #calculation-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            flex: 1; /* Ensure this takes available space */
+        }
+
+        #calculation-area {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        #calculation-area button {
+            width: 100%;
+            font-size: 14px;
+        }
+
+        #instructions {
+            margin-top: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="column" id="calculation-column">
+        <h1>Tree Information</h1>
+        <div class="input-field">
+            <label for="tree-name">Name</label>
+            <input type="text" id="tree-name">
+        </div>
+        <div class="input-field">
+            <label for="geo-location">Geo Location</label>
+            <input type="text" id="geo-location">
+        </div>
+        <div class="input-field">
+            <label for="tree-height">Height (in meters)</label>
+            <input type="number" step="0.01" id="tree-height" disabled>
+        </div>
+        <div class="input-field">
+            <label for="diameter-width">Diameter / Width (in inches)</label>
+            <input type="number" step="0.01" id="diameter-width" disabled>
+        </div>
+        <div class="input-field">
+            <label for="tree-age">Age (in years)</label>
+            <input type="number" id="tree-age">
+        </div>
+    </div>
+
+    <div class="column" id="upload-column">
+        <h1>Upload Image</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" id="image-input" accept="image/*" required>
+            <button type="submit">Upload Image</button>
+        </form>
+
+        <div id="calculation-container" style="display: none;">
+            <div id="image-container">
+                <h2>Image Preview</h2>
+                <img id="uploaded-image" src="" alt="Uploaded Image">
+            </div>
+
+            <div id="calculation-area">
+                <button onclick="setPoint('reference-top', this)">Set Reference Top</button>
+                <button onclick="setPoint('reference-bottom', this)">Set Reference Bottom</button>
+                <button onclick="setPoint('reference-left', this)">Set Reference Left</button>
+                <button onclick="setPoint('reference-right', this)">Set Reference Right</button>
+                <button onclick="setPoint('tree-top', this)">Set Tree Top</button>
+                <button onclick="setPoint('tree-bottom', this)">Set Tree Bottom</button>
+                <button onclick="setPoint('tree-left', this)">Set Tree Left</button>
+                <button onclick="setPoint('tree-right', this)">Set Tree Right</button>
+                <button onclick="calculateDimensions()">Calculate Dimensions</button>
+                <button onclick="insertToDatabase()">Insert to DB</button>
+            </div>
+            <p id="result"></p>
+        </div>
+    </div>
+
+    <script>
+        let points = {};
+        let knownHeight = 1.6; // Known height of the reference object in meters
+        let knownWidth = 0.5;  // Known width of the reference object in meters
+
+        // Upload image handling
+        document.getElementById('upload-form').onsubmit = function (e) {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('image-input');
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (event) {
+                document.getElementById('uploaded-image').src = event.target.result;
+                document.getElementById('calculation-container').style.display = 'flex';
+            };
+
+            reader.readAsDataURL(file);
+        };
+
+        function setPoint(name, button) {
+            resetButtonColors();
+            button.classList.add("active");
+
+            const img = document.getElementById('uploaded-image');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.drawImage(img, 0, 0);
+            img.parentNode.appendChild(canvas);
+            img.style.display = 'none';
+
+            canvas.addEventListener('click', function (event) {
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                points[name] = { x: x, y: y };
+
+                canvas.remove();
+                img.style.display = 'block';
+
+                document.getElementById('instructions').innerText = `${name} set at (${x.toFixed(2)}, ${y.toFixed(2)})`;
+                resetButtonColors();
+            });
+        }
+
+        function resetButtonColors() {
+            document.querySelectorAll("button").forEach(button => {
+                button.classList.remove("active");
+            });
+        }
+
+        async function calculateDimensions() {
+            const refTop = points['reference-top'];
+            const refBottom = points['reference-bottom'];
+            const refLeft = points['reference-left'];
+            const refRight = points['reference-right'];
+            const treeTop = points['tree-top'];
+            const treeBottom = points['tree-bottom'];
+            const treeLeft = points['tree-left'];
+            const treeRight = points['tree-right'];
+
+            if (!refTop || !refBottom || !refLeft || !refRight || !treeTop || !treeBottom || !treeLeft || !treeRight) {
+                alert("Please set all points before calculating.");
+                return;
+            }
+
+            const referenceHeight = Math.sqrt(
+                Math.pow(refTop.x - refBottom.x, 2) + Math.pow(refTop.y - refBottom.y, 2)
+            );
+            const referenceWidth = Math.sqrt(
+                Math.pow(refLeft.x - refRight.x, 2) + Math.pow(refLeft.y - refRight.y, 2)
+            );
+
+            const pixelsPerMeterHeight = referenceHeight / knownHeight;
+            const pixelsPerMeterWidth = referenceWidth / knownWidth;
+
+            const treeHeightInPixels = Math.sqrt(
+                Math.pow(treeTop.x - treeBottom.x, 2) + Math.pow(treeTop.y - treeBottom.y, 2)
+            );
+            const treeWidthInPixels = Math.sqrt(
+                Math.pow(treeLeft.x - treeRight.x, 2) + Math.pow(treeLeft.y - treeRight.y, 2)
+            );
+
+            const treeHeight = treeHeightInPixels / pixelsPerMeterHeight;
+            const treeWidth = treeWidthInPixels / pixelsPerMeterWidth;
+
+            document.getElementById("tree-height").value = treeHeight.toFixed(2);
+            document.getElementById("diameter-width").value = treeWidth.toFixed(2);
+
+            document.getElementById("result").innerText = `Tree height is approximately ${treeHeight.toFixed(2)} meters and width is ${treeWidth.toFixed(2)} meters.`;
+        }
+
+        async function insertToDatabase() {
+            const treeName = document.getElementById("tree-name").value;
+            const geoLocation = document.getElementById("geo-location").value;
+            const treeHeight = document.getElementById("tree-height").value;
+            const treeWidth = document.getElementById("diameter-width").value;
+            const treeAge = document.getElementById("tree-age").value;
+            const imageInput = document.getElementById("image-input");
+
+            // Create FormData object to handle file upload
+            const formData = new FormData();
+            formData.append('name', treeName);
+            formData.append('location', geoLocation);
+            formData.append('height', treeHeight);
+            formData.append('width', treeWidth);
+            formData.append('age', treeAge);
+            
+            // Append the image to the form data if available
+            if (imageInput.files[0]) {
+                formData.append('image', imageInput.files[0]);
+            }
+
+            try {
+                const response = await fetch("/insert", {
+                    method: "POST",
+                    body: formData  // Send form data, including image
+                });
+
+                if (response.ok) {
+                    alert("Tree information successfully inserted into the database.");
+                } else {
+                    alert("Error inserting tree .");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Network error occurred.");
+            }
+        }
+    </script>
+</body>
+</html>
